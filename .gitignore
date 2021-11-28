@@ -1,0 +1,8 @@
+.DS_Store
+.pyc
+*.pyc
+CACHE/*
+bin/
+lib/*
+.vscode/
+pyvenv.cfg
