@@ -27,14 +27,14 @@ trust_in_gov = trust_in_gov.drop_duplicates(['LOCATION'])
 owid_covid = pd.read_csv('./data/owid-covid-data.csv', comment="#")
 
 # the attribute we want to use for a hue
-hue_key = 'gdp_per_capita'
+hue_key = 'human_development_index'
 hue = owid_covid.dropna(subset=[hue_key,])
 hue = hue.sort_values('date', ascending=False)
 hue = hue.drop_duplicates(['iso_code']).set_index('iso_code')
 hue = hue.filter([hue_key])
 
 # select a key to use
-owid_key = 'total_deaths_per_million'
+owid_key = 'people_fully_vaccinated_per_hundred'
 # get the most recent measurement for our key
 owid_covid = owid_covid.dropna(subset=[owid_key,])
 owid_covid = owid_covid.sort_values('date', ascending=False)
@@ -55,9 +55,8 @@ ax = sns.scatterplot(
 )
 _, labels = ax.get_legend_handles_labels()
 ax.legend(
-	title='GDP per Capita:', 
-	loc='upper left', 
-	labels = ['{:,.0f}$'.format(int(x)).replace(',', '.')  for x in labels]
+	title='Human Development Index:', 
+	loc='lower left', 
 )
 
 ax.set(ylim=(0, joined[owid_key].max()*1.05), xlim=(0, 100))
@@ -73,23 +72,25 @@ ax.set_ylabel(owid_key.replace('_', ' ').title() + ' (Nov 2021)')
 footer_right = "\n".join([
 	'Sources:',
 	'* Our World in Data: https://covid.ourworldindata.org/data/owid-covid-data.csv',
-	'* OECD: https://data.oecd.org/gga/trust-in-government.htm'
+	'* OECD: https://data.oecd.org/gga/trust-in-government.htm',
 ])
 ax.figure.text(x=0.6, y=0.01, s=footer_right, fontsize=8, alpha=0.75)
 
 footer_left = "\n".join([
 	'Made by Karl Tryggvason',
 	'@KarlTryggvason / KarlTryggvason.com',
-	'https//github.com/kalli',
+	'https//github.com/kalli/covid-data',
 ])
 ax.figure.text(x=0.005, y=0.01, s=footer_left, fontsize=8, alpha=0.75)
 
 
 # laborious manual label placement... 
-CENTER = -20
-LOWER = -50
 offsets = {}
 if owid_key == 'total_deaths_per_million': 
+	_x = 1
+	_y = 1
+	CENTER = -20
+	LOWER = -50
 	offsets = {
 		'France': [1, CENTER],
 		'Greece': [1, LOWER],
@@ -101,9 +102,35 @@ if owid_key == 'total_deaths_per_million':
 		'Switzerland': [1, CENTER],
 	}
 
+if owid_key == 'people_fully_vaccinated_per_hundred': 
+	_x = 0.5
+	_y = 0.5
+	CENTER = -0.3
+	LOWER = -1
+	offsets = {
+		'Brazil': [0.5, CENTER],
+		'Costa Rica': [-10, CENTER],
+		'Czechia': [0.5, LOWER],
+		'Estonia': [0.5, CENTER],
+		'Finland': [0.5, CENTER],
+		'Germany': [0.5, CENTER],
+		'Israel': [0.5, CENTER],
+		'Iceland': [1, 0.5],
+		'Ireland': [0.5, LOWER],
+		'Norway': [0.5, CENTER],
+		'Slovenia': [0.5, CENTER],
+		'South Korea': [0.5, CENTER],
+		'Sweden': [0.5, CENTER],
+		'Switzerland': [0.5, CENTER],
+		'Turkey': [0.5, CENTER],
+		'United Kingdom': [0.5, CENTER],
+		'United States': [0.5, LOWER],
+	}
+
+
 # add labels
 for line in range(0, joined.shape[0]):
-	x, y, = offsets.get(joined.location[line], [1, 1])
+	x, y, = offsets.get(joined.location[line], [_x, _y])
 
 	ax.text(
 		joined.Value[line]+x, 
