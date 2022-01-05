@@ -67,7 +67,7 @@ corr = 'Correlation {0:10.2f}'.format(joined['Value'].corr(joined[owid_key]))
 
 ax.set_title(label='Covid outcomes and Trust in Government', fontsize=16, weight='bold')
 ax.set_xlabel('Trust in government (most recent available measurement)')
-ax.set_ylabel(owid_key.replace('_', ' ').title() + ' (Nov 2021)')
+ax.set_ylabel(owid_key.replace('_', ' ').title() + ' (Jan 2022)')
 
 footer_right = "\n".join([
 	'Sources:',
