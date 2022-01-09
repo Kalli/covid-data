@@ -1,5 +1,7 @@
 import pandas as pd
 import seaborn as sns
+from matplotlib.dates import MonthLocator, DateFormatter
+import matplotlib.pyplot as plt
 
 # thanks color hunt https://colorhunt.co/palette/2e4c6d396eb0daddfcfc997c
 first = '#2E4C6D'
@@ -26,7 +28,7 @@ def load_trust_in_gov():
 	trust_in_gov = trust_in_gov.set_index('LOCATION')
 	return trust_in_gov
 
-trust = load_trust_in_gov()
+# trust = load_trust_in_gov()
 
 def load_owid_covid(scatter_key, hue_key):
 	owid_covid = pd.read_csv('./data/owid-covid-data.csv', comment="#")
@@ -46,8 +48,7 @@ def load_owid_covid(scatter_key, hue_key):
 
 owid_key = 'people_fully_vaccinated_per_hundred'
 hue = 'human_development_index'
-vaccinated, hdi= load_owid_covid(owid_key, hue)
-
+# vaccinated, hdi= load_owid_covid(owid_key, hue)
 
 def scatter(joined, hue_key):
 	ax = sns.scatterplot(
@@ -74,19 +75,12 @@ def scatter(joined, hue_key):
 	ax.set_xlabel('Trust in government (most recent available measurement)')
 	ax.set_ylabel(owid_key.replace('_', ' ').title() + ' (Jan 2022)')
 
-	footer_right = "\n".join([
-		'Sources:',
-		'* Our World in Data: https://covid.ourworldindata.org/data/owid-covid-data.csv',
-		'* OECD: https://data.oecd.org/gga/trust-in-government.htm',
-	])
-	ax.figure.text(x=0.6, y=0.01, s=footer_right, fontsize=8, alpha=0.75)
-
-	footer_left = "\n".join([
-		'Made by Karl Tryggvason',
-		'@KarlTryggvason / KarlTryggvason.com',
-		'https//github.com/kalli/covid-data',
-	])
-	ax.figure.text(x=0.005, y=0.01, s=footer_left, fontsize=8, alpha=0.75)
+	ax = set_footer(
+		ax, [
+			'* Our World in Data: https://covid.ourworldindata.org/data/owid-covid-data.csv',
+			'* OECD: https://data.oecd.org/gga/trust-in-government.htm',
+		]
+	)
 	# add labels
 	for line in range(0, joined.shape[0]):
 		x, y, = 0.5, 0.5
@@ -102,4 +96,107 @@ def scatter(joined, hue_key):
 
 	ax.get_figure().savefig('./img/{0}_trust_in_government.svg'.format(owid_key))
 
-scatter(trust.join(vaccinated).join(hdi), hue)
+
+def set_footer(ax, sources):
+	footer_right = "\n".join(['Sources:'] + sources)
+	ax.figure.text(x=0.55, y=0.01, s=footer_right, fontsize=8, alpha=0.75, color=second)
+	
+	footer_left = "\n".join([
+		'Made by Karl Tryggvason',
+		'@KarlTryggvason / KarlTryggvason.com',
+		'https//github.com/kalli/covid-data',
+	])
+	ax.figure.text(x=0.005, y=0.01, s=footer_left, fontsize=8, alpha=0.75, color=second)
+	return ax
+
+# scatter(trust.join(vaccinated).join(hdi), hue)
+
+
+def owid_data_by_country(country_iso, data_key, data):
+	df = data.dropna(subset=data_key)
+	df = df.sort_values('date', ascending=True)
+	df = df[df['iso_code'] == country_iso]
+	df = df.dropna(axis='columns')
+	return df
+
+
+def movement_data_by_country( country, area_id):
+	# https://data.humdata.org/dataset/movement-range-maps
+	# the full file is huge, so check to see if we have a cache
+	file_path = './data/{0}-movement-range-data.txt'.format(country)
+	try: 
+		df = pd.read_csv(file_path, comment="#", parse_dates=['ds'])
+	except: 
+		df = pd.read_csv('./data/movement-range-data.txt', comment="#", sep='\t')
+		df = df.sort_values('ds', ascending=True)
+		df.to_csv(file_path, index=False)
+	df = df[(df['country'] == country) & (df['polygon_id'] == area_id)]
+	# 7 day rolling average
+	key = 'all_day_bing_tiles_visited_relative_change'
+	df['tiles_visited_7_day_rolling_average'] = df[key].rolling(window=7).mean() 
+	return df
+
+owid_covid = pd.read_csv('./data/owid-covid-data.csv', comment="#", parse_dates=['date'])
+iceland_data = owid_data_by_country('ISL', ['new_cases_smoothed',  'stringency_index'], owid_covid)
+
+# ISL.3_1 == Capital region
+iceland_movement = movement_data_by_country('ISL', 'ISL.3_1')
+joined = iceland_movement.set_index('ds').join(iceland_data.set_index('date'))
+joined = joined[['tiles_visited_7_day_rolling_average', 'new_cases_smoothed', 'stringency_index']]
+
+
+def movement_cases_lineplot(data, name, country, region):
+	fig, ax = plt.subplots(3)
+	sns.set(style='ticks')
+
+	g1 = sns.lineplot(
+		ax = ax[0],
+		data=data['new_cases_smoothed'],
+		color=third,
+	)
+	g1.set_ylim(0, data['new_cases_smoothed'].max()* 1.05)
+	g1.set_xlim(data.index.min(), data.index.max())
+	title = 'Covid cases in {0} (7 day rolling average)'.format(country)
+	g1.set_title(label=title, fontsize=16, weight='bold')
+	g1.set_ylabel('New confirmed cases \n of COVID-19')
+	g1.set_xlabel('')
+	g1.grid(False)
+	g1.set_xticklabels([])
+
+	g2 = sns.lineplot(
+		ax = ax[1],
+		data=data['stringency_index'],
+		color=third,
+	)
+	g2.set_ylim(0, data['stringency_index'].max()* 1.05)
+	g2.set_xlim(data.index.min(), data.index.max())
+	title = 'Government Response Stringency Index'.format(country)
+	g2.set_title(label=title, fontsize=16, weight='bold')
+	g2.set_ylabel('Government Response \n Stringency Index')
+	g2.set_xlabel('')
+	g2.grid(False)
+	g2.set_xticklabels([])
+
+	g3 = sns.lineplot(
+		ax = ax[2],
+		data=data['tiles_visited_7_day_rolling_average'],
+		color=third,
+	)
+	g3.set_xlim(data.index.min(), data.index.max())
+	title = 'Change in Movement - {0} {1}'.format(country, region)
+	g3.set_title(label=title, fontsize=16, weight='bold')
+	g3.set_ylabel('Relative change in movement\n (compared to February 2020 baseline)')
+	g3.set_yticklabels(['{:,.0f}%'.format(x*100).replace(',', '.')  for x in g3.get_yticks()])
+	g3.set_xlabel('Date')
+	g3.grid(False)
+
+	fig = set_footer(fig, [
+		'* Our World in Data: https://covid.ourworldindata.org/data/owid-covid-data.csv',
+		'* Humanitarian Data Exchange: https://data.humdata.org/dataset/movement-range-maps',
+	])
+	g3.xaxis.set_major_locator(MonthLocator(interval=3, bymonthday=1))
+	g3.xaxis.set_major_formatter(DateFormatter('%b %y'))
+	fig.savefig('./img/{0}.svg'.format(name))
+
+
+movement_cases_lineplot(joined, 'new_cases_stringency_movement_change_iceland', 'Iceland', 'Capital Region')
