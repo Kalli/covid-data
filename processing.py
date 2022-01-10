@@ -1,6 +1,7 @@
 import pandas as pd
 import seaborn as sns
 from matplotlib.dates import MonthLocator, DateFormatter
+from matplotlib.ticker import FixedLocator
 import matplotlib.pyplot as plt
 
 # thanks color hunt https://colorhunt.co/palette/2e4c6d396eb0daddfcfc997c
@@ -17,7 +18,7 @@ sns.set_theme(rc={
     'axes.labelcolor': second, 'text.color': second, 
 	'ytick.color': second, 'xtick.color': second, 
 	'grid.color': second, 
-	"figure.figsize": (10, 10),
+	'figure.figsize': (10, 10),
 })
 
 def load_trust_in_gov():
@@ -112,15 +113,15 @@ def set_footer(ax, sources):
 # scatter(trust.join(vaccinated).join(hdi), hue)
 
 
-def owid_data_by_country(country_iso, data_key, data):
-	df = data.dropna(subset=data_key)
+def owid_data_by_country(country_iso, data_keys, data):
+	df = data.dropna(subset=data_keys)
 	df = df.sort_values('date', ascending=True)
 	df = df[df['iso_code'] == country_iso]
 	df = df.dropna(axis='columns')
 	return df
 
 
-def movement_data_by_country( country, area_id):
+def movement_data_by_country(country, area_id):
 	# https://data.humdata.org/dataset/movement-range-maps
 	# the full file is huge, so check to see if we have a cache
 	file_path = './data/{0}-movement-range-data.txt'.format(country)
@@ -129,25 +130,16 @@ def movement_data_by_country( country, area_id):
 	except: 
 		df = pd.read_csv('./data/movement-range-data.txt', comment="#", sep='\t')
 		df = df.sort_values('ds', ascending=True)
+		df = df[(df['country'] == country) & (df['polygon_id'] == area_id)]
 		df.to_csv(file_path, index=False)
-	df = df[(df['country'] == country) & (df['polygon_id'] == area_id)]
 	# 7 day rolling average
 	key = 'all_day_bing_tiles_visited_relative_change'
 	df['tiles_visited_7_day_rolling_average'] = df[key].rolling(window=7).mean() 
 	return df
 
-owid_covid = pd.read_csv('./data/owid-covid-data.csv', comment="#", parse_dates=['date'])
-iceland_data = owid_data_by_country('ISL', ['new_cases_smoothed',  'stringency_index'], owid_covid)
-
-# ISL.3_1 == Capital region
-iceland_movement = movement_data_by_country('ISL', 'ISL.3_1')
-joined = iceland_movement.set_index('ds').join(iceland_data.set_index('date'))
-joined = joined[['tiles_visited_7_day_rolling_average', 'new_cases_smoothed', 'stringency_index']]
-
 
 def movement_cases_lineplot(data, name, country, region):
 	fig, ax = plt.subplots(3)
-	sns.set(style='ticks')
 
 	g1 = sns.lineplot(
 		ax = ax[0],
@@ -162,6 +154,8 @@ def movement_cases_lineplot(data, name, country, region):
 	g1.set_xlabel('')
 	g1.grid(False)
 	g1.set_xticklabels([])
+	g1.yaxis.set_major_locator(FixedLocator(g1.get_yticks()))
+	g1.set_yticklabels(['{:,.0f}'.format(x).replace(',', '.')  for x in g1.get_yticks()])
 
 	g2 = sns.lineplot(
 		ax = ax[1],
@@ -183,10 +177,12 @@ def movement_cases_lineplot(data, name, country, region):
 		color=third,
 	)
 	g3.set_xlim(data.index.min(), data.index.max())
-	title = 'Change in Movement - {0} {1}'.format(country, region)
+	title = 'Change in Movement - {1} / {0}'.format(country, region)
 	g3.set_title(label=title, fontsize=16, weight='bold')
 	g3.set_ylabel('Relative change in movement\n (compared to February 2020 baseline)')
-	g3.set_yticklabels(['{:,.0f}%'.format(x*100).replace(',', '.')  for x in g3.get_yticks()])
+	ticks = g3.get_yticks()
+	g3.yaxis.set_major_locator(FixedLocator(ticks))
+	g3.set_yticklabels(['{:,.0f}%'.format(x*100).replace(',', '.')  for x in ticks])
 	g3.set_xlabel('Date')
 	g3.grid(False)
 
@@ -194,9 +190,26 @@ def movement_cases_lineplot(data, name, country, region):
 		'* Our World in Data: https://covid.ourworldindata.org/data/owid-covid-data.csv',
 		'* Humanitarian Data Exchange: https://data.humdata.org/dataset/movement-range-maps',
 	])
-	g3.xaxis.set_major_locator(MonthLocator(interval=3, bymonthday=1))
+	g3.xaxis.set_major_locator(MonthLocator(interval=2, bymonthday=1))
 	g3.xaxis.set_major_formatter(DateFormatter('%b %y'))
+	g3.xaxis.set_minor_locator(MonthLocator(interval=1, bymonthday=1))
+	g3.tick_params(which="both", bottom=True)
 	fig.savefig('./img/{0}.svg'.format(name))
 
 
-movement_cases_lineplot(joined, 'new_cases_stringency_movement_change_iceland', 'Iceland', 'Capital Region')
+owid_covid = pd.read_csv('./data/owid-covid-data.csv', comment="#", parse_dates=['date'])
+regions = [
+	['ISL', 'ISL.3_1', 'Iceland', 'Capital Region'],
+	['DNK', 'DNK.1_1', 'Denmark', 'Capital Region'],
+	['NOR', 'NOR.12_1', 'Norway', 'Oslo'],
+	['GBR', 'GBR.1_1', 'Great Britain', 'England'],
+]
+
+for r in regions:
+	country_code, region_code, country_name, region_name = r
+	country_covid = owid_data_by_country(country_code, ['new_cases_smoothed',  'stringency_index'], owid_covid).dropna()
+	country_movement = movement_data_by_country(country_code, region_code)
+	joined = country_movement.set_index('ds').join(country_covid.set_index('date'))
+	joined = joined[['tiles_visited_7_day_rolling_average', 'new_cases_smoothed', 'stringency_index']]
+	file_name = 'new_cases_stringency_movement_change_{0}'.format(country_name.lower().replace(" ", "_"))
+	movement_cases_lineplot(joined, file_name, country_name, region_name)

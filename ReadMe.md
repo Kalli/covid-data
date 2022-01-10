@@ -10,8 +10,17 @@ Some covid related data wrangling.
 
 ## Graphs
 
+
+## Trust in Government 
+
 ![Vaccination and Trust in Government](img/people_fully_vaccinated_per_hundred_trust_in_government.svg?raw=true)
 
 ![Deaths and Trust in Government](img/total_deaths_per_million_trust_in_government.svg?raw=true)
 
+## Cases / Stringency Index / Change in Movement
+
 ![Cases / Stringency Index / Change in Movement in Iceland](img/new_cases_stringency_movement_change_iceland.svg?raw=true)
+
+![Cases / Stringency Index / Change in Movement in Denmark](img/new_cases_stringency_movement_change_denmark.svg?raw=true)
+
+![Cases / Stringency Index / Change in Movement in Iceland](img/new_cases_stringency_movement_change_great_britain.svg?raw=true)
